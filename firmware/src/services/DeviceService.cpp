@@ -5,6 +5,8 @@
 #include "config/version.h"
 #include "extensions/AlarmExtension.h"
 #include "extensions/ButtonExtension.h"
+#include "extensions/ProvisioningExtension.h"
+#include "handlers/ConfigHandler.h"
 #include "modes/TickerMode.h"
 #include "services/DisplayService.h"
 #include "services/ExtensionsService.h"
@@ -16,30 +18,47 @@
 #include <WiFi.h>
 #include <hardware/adc.h>
 #include <pico/cyw43_arch.h>
+#include <string>
 #include <time.h>
 
 void DeviceService::begin0()
 {
-    Serial.begin();
+    Serial.begin(115200);
+    Serial.println("[boot] core0");
+    // Only core0 mounts LittleFS (never on core1 — dual mount races).
+    const bool fsOk{LittleFS.begin()};
+    Serial.printf("[boot] LittleFS %s\n", fsOk ? "ok" : "FAIL");
+#if defined(PROVISION_CLEAR_WIFI) && PROVISION_CLEAR_WIFI
+    static_cast<void>(ConfigHandler::remove("Wifi", "ssid"));
+    static_cast<void>(ConfigHandler::remove("Wifi", "key"));
+    Serial.println("[provision] cleared LittleFS Wifi (PROVISION_CLEAR_WIFI)");
+#endif
     extensions.configure();
+    Serial.println("[boot] configured");
     WiFi.setHostname(HOSTNAME);
-    WiFi.begin(WIFI_SSID, WIFI_KEY);
-    lastWifiAttemptMs = millis();
 #ifdef TIME_ZONE_POSIX
     setenv("TZ", TIME_ZONE_POSIX, 1);
     tzset();
 #endif // TIME_ZONE_POSIX
+    // Join via LittleFS / secrets before the web server binds. NTP stays in pollTime (non-blocking).
+    const bool station{ProvisioningExtension::beginStation()};
+    Serial.printf("[boot] station=%d\n", station ? 1 : 0);
+    lastWifiAttemptMs = millis();
     webServer.begin();
     WebServerService::http.on("/stats", AsyncWebRequestMethod::AsyncWebRequestMethodType::HTTP_GET, &onGetStats);
     extensions.begin();
+    Serial.println("[boot] extensions ready");
     rp2040.fifo.push(1UL);
+    Serial.println("[boot] core0 done");
 }
 
 void DeviceService::begin1()
 {
-    LittleFS.begin();
+    // Display must not wait on FS/WiFi — otherwise a LittleFS hang leaves a black panel forever.
     display.begin();
     fonts.begin();
+    DisplayService::setPower(true);
+    DisplayService::setBrightness(DisplayService::Brightness::DUTY14);
     static_cast<void>(rp2040.fifo.pop());
     modes.begin();
 }
@@ -183,6 +202,11 @@ bool DeviceService::isTimeSynced() { return timeSynced; }
 
 void DeviceService::pollWifi()
 {
+    if (ProvisioningExtension::isActive())
+    {
+        return;
+    }
+
     const unsigned long nowMs{millis()};
     if (WiFi.status() == WL_CONNECTED)
     {
@@ -208,14 +232,40 @@ void DeviceService::pollWifi()
         Serial.println("wifi lost");
     }
 
-    if ((nowMs - lastWifiAttemptMs) >= wifiRetryMs)
+    if ((nowMs - lastWifiAttemptMs) < wifiRetryMs)
     {
-        lastWifiAttemptMs = nowMs;
-        Serial.println("wifi retry");
-        WiFi.disconnect(true);
-        delay(100);
-        WiFi.begin(WIFI_SSID, WIFI_KEY);
+        return;
     }
+    lastWifiAttemptMs = nowMs;
+
+    std::string ssid{};
+    std::string key{};
+    if (!ConfigHandler::get("Wifi", "ssid", ssid) || ssid.empty())
+    {
+#ifdef WIFI_SSID
+        const char *compiled{WIFI_SSID};
+        if (compiled != nullptr && compiled[0] != '\0')
+        {
+            ssid = compiled;
+#ifdef WIFI_KEY
+            key = WIFI_KEY;
+#endif
+        }
+#endif
+    }
+    else
+    {
+        static_cast<void>(ConfigHandler::get("Wifi", "key", key));
+    }
+    if (ssid.empty())
+    {
+        return;
+    }
+
+    Serial.println("wifi retry");
+    WiFi.disconnect(true);
+    delay(100);
+    static_cast<void>(WiFi.begin(ssid.c_str(), key.empty() ? nullptr : key.c_str()));
 }
 
 void DeviceService::pollTime()

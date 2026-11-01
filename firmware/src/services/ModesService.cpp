@@ -1,5 +1,7 @@
 #include "services/ModesService.h"
 
+#include "extensions/OtaExtension.h"
+#include "extensions/ProvisioningExtension.h"
 #include "services/DeviceService.h"
 #include "services/DisplayService.h"
 
@@ -13,6 +15,16 @@ void ModesService::begin()
 
 void ModesService::handle()
 {
+    if (OtaExtension::isUpdating())
+    {
+        // Keep the OTA frame; DeviceService still flushes.
+        return;
+    }
+    if (ProvisioningExtension::isActive())
+    {
+        ProvisioningExtension::draw();
+        return;
+    }
     if (mode != nullptr)
     {
         mode->handle();

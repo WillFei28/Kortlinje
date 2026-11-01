@@ -2,6 +2,7 @@
 
 #include "config/secrets.h"
 #include "extensions/AlarmExtension.h"
+#include "extensions/ProvisioningExtension.h"
 #include "services/DisplayService.h"
 #include "services/ModesService.h"
 #include "services/WebServerService.h"
@@ -43,10 +44,46 @@ void ButtonExtension::begin()
 
 void ButtonExtension::handle()
 {
+    // SET: short press on release → AM/PM; hold 3s → SoftAP provisioning
+    static unsigned long setHeldMs{0UL};
+    static bool setLongHandled{false};
+    if (rear.state == Button::SET && rear.pressed)
+    {
+        if (setHeldMs == 0UL)
+        {
+            setHeldMs = millis();
+            setLongHandled = false;
+        }
+        else if (!setLongHandled && millis() - setHeldMs >= 3000UL)
+        {
+            setLongHandled = true;
+            ProvisioningExtension::toggle();
+        }
+    }
+    else if (setHeldMs != 0UL)
+    {
+        if (!setLongHandled)
+        {
+            if (ProvisioningExtension::isActive())
+            {
+                ProvisioningExtension::exit();
+            }
+            else
+            {
+                config();
+            }
+        }
+        setHeldMs = 0UL;
+        setLongHandled = false;
+    }
+
     if (rear.ready)
     {
         rear.ready = false;
-        process(rear.state);
+        if (rear.state != Button::SET)
+        {
+            process(rear.state);
+        }
     }
     else if (top.ready)
     {
