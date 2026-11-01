@@ -7,8 +7,11 @@
 /.venv
 /.vscode
 /firmware/include/config/secrets*.h
+/local/
 /logs
 /webui/.env*
 /webui/dist
 /webui/node_modules
 __pycache__
+.DS_Store
+

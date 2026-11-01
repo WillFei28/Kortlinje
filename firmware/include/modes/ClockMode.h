@@ -9,6 +9,7 @@ class ClockMode final : public ModeModule
 {
 private:
     bool pending{false};
+    bool showingPlaceholder{false};
 
     int hour{24};
     int minute{60};
@@ -16,6 +17,9 @@ private:
     time_t now{};
 
     tm local{};
+
+    void drawPlaceholder();
+    void drawTime();
 
 public:
     static constexpr std::string_view name{"Clock"};

@@ -1,21 +1,13 @@
 #include "services/ModesService.h"
 
-#include "handlers/ConfigHandler.h"
 #include "services/DeviceService.h"
 #include "services/DisplayService.h"
 
-#include <vector>
-
 void ModesService::begin()
 {
-    std::string _name{};
-    if (ConfigHandler::get(name, "mode", _name))
-    {
-        setMode(_name);
-    }
     if (mode == nullptr)
     {
-        setMode(names[random(names.size())]);
+        setMode(ClockMode::name);
     }
 }
 
@@ -25,6 +17,19 @@ void ModesService::handle()
     {
         mode->handle();
     }
+    if (!pendingMode.empty())
+    {
+        const std::string_view next{pendingMode};
+        const bool power{pendingPower};
+        pendingMode = {};
+        setMode(next, power);
+    }
+}
+
+void ModesService::requestMode(std::string_view modeName, bool power)
+{
+    pendingMode = modeName;
+    pendingPower = power;
 }
 
 std::unique_ptr<ModeModule> ModesService::getMode(std::string_view modeName)
@@ -33,41 +38,9 @@ std::unique_ptr<ModeModule> ModesService::getMode(std::string_view modeName)
     {
         return std::make_unique<ClockMode>();
     }
-    if (modeName == DateMode::name)
-    {
-        return std::make_unique<DateMode>();
-    }
-    if (modeName == EqualizerMode::name)
-    {
-        return std::make_unique<EqualizerMode>();
-    }
-    if (modeName == HumidityMode::name)
-    {
-        return std::make_unique<HumidityMode>();
-    }
-    if (modeName == PingPongMode::name)
-    {
-        return std::make_unique<PingPongMode>();
-    }
-    if (modeName == SnakeMode::name)
-    {
-        return std::make_unique<SnakeMode>();
-    }
-    if (modeName == TemperatureMode::name)
-    {
-        return std::make_unique<TemperatureMode>();
-    }
     if (modeName == TickerMode::name)
     {
         return std::make_unique<TickerMode>();
-    }
-    if (modeName == WeatherMode::name)
-    {
-        return std::make_unique<WeatherMode>();
-    }
-    if (modeName == WeekdayMode::name)
-    {
-        return std::make_unique<WeekdayMode>();
     }
     return nullptr;
 }
@@ -87,7 +60,6 @@ void ModesService::setMode(std::string_view modeName, bool power)
             DisplayService::setPower(true);
         }
         mode->begin();
-        ConfigHandler::set(name, "mode", modeName);
         transmit();
     }
 }
@@ -110,7 +82,7 @@ void ModesService::setModeNext()
         if (names[idx] == mode->name)
         {
             const size_t index{(idx + 1U) % names.size()};
-            setMode(names[index], index != 0U);
+            setMode(names[index], true);
             return;
         }
     }
@@ -124,7 +96,7 @@ void ModesService::setModePrevious()
         if (names[idx] == mode->name)
         {
             const size_t index{(idx + names.size() - 1U) % names.size()};
-            setMode(names[index], index != 0U);
+            setMode(names[index], true);
             return;
         }
     }

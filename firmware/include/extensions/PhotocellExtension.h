@@ -16,7 +16,7 @@ private:
 
     static inline volatile alarm_id_t alarm{0L};
 
-    bool enabled{true};
+    bool enabled{false};
 
     void transmit();
     static void cancelAlarm();

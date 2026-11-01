@@ -33,6 +33,19 @@ private:
         0b100001110U,
     };
 
+    // U+002D - HYPHEN-MINUS
+    static constexpr std::array<uint8_t, 9U> hyphenMinus{
+        0b0000000U,
+        0b0000000U,
+        0b0000000U,
+        0b0000000U,
+        0b1111110U,
+        0b0000000U,
+        0b0000000U,
+        0b0000000U,
+        0b0000000U,
+    };
+
     // U+002E . FULL STOP
     static constexpr std::array<uint8_t, 2U> fullStop{
         0b11U,
@@ -300,6 +313,45 @@ private:
         },
     }};
 
+    // U+004B K LATIN CAPITAL LETTER K
+    static constexpr std::array<uint8_t, 9U> latinCapitalLetterK{
+        0b1100011U,
+        0b1100011U,
+        0b1100110U,
+        0b1101100U,
+        0b1111000U,
+        0b1101100U,
+        0b1100110U,
+        0b1100011U,
+        0b1100011U,
+    };
+
+    // U+0051 Q LATIN CAPITAL LETTER Q
+    static constexpr std::array<uint8_t, 9U> latinCapitalLetterQ{
+        0b0111110U,
+        0b1100011U,
+        0b1100011U,
+        0b1100011U,
+        0b1100011U,
+        0b1100011U,
+        0b1101011U,
+        0b1100110U,
+        0b0111101U,
+    };
+
+    // U+0058 X LATIN CAPITAL LETTER X
+    static constexpr std::array<uint8_t, 9U> latinCapitalLetterX{
+        0b1100011U,
+        0b1100011U,
+        0b0110110U,
+        0b0011100U,
+        0b0001000U,
+        0b0011100U,
+        0b0110110U,
+        0b1100011U,
+        0b1100011U,
+    };
+
     // U+0059 Y LATIN CAPITAL LETTER Y
     static constexpr std::array<uint8_t, 9U> latinCapitalLetterY{
         0b110011U,
@@ -311,6 +363,19 @@ private:
         0b001100U,
         0b001100U,
         0b001100U,
+    };
+
+    // U+005A Z LATIN CAPITAL LETTER Z
+    static constexpr std::array<uint8_t, 9U> latinCapitalLetterZ{
+        0b1111111U,
+        0b0000011U,
+        0b0000110U,
+        0b0001100U,
+        0b0011000U,
+        0b0110000U,
+        0b1100000U,
+        0b1100000U,
+        0b1111111U,
     };
 
     // U+0065 e LATIN SMALL LETTER E
@@ -461,7 +526,7 @@ public:
         {
             // U+0037 7 DIGIT SEVEN
             0b1111111U,
-            000000011U,
+            0b0000011U,
             0b0000011U,
             0b0000011U,
             0b0000110U,

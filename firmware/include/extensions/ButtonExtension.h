@@ -3,6 +3,7 @@
 #include "config/secrets.h"
 #include "modules/ExtensionModule.h"
 
+#include <ESPAsyncWebServer.h>
 #include <hardware/dma.h>
 
 class ButtonExtension final : public ExtensionModule
@@ -45,7 +46,22 @@ private:
         const Button _medium{Button::UNKNOWN};
         const Button _zero{Button::UNKNOWN};
         volatile Button state{Button::UNKNOWN};
+        volatile uint16_t lastRaw{0U};
     };
+
+    static constexpr size_t logCap{64U};
+    static constexpr size_t logLineLen{144U};
+
+    struct LogLine
+    {
+        uint32_t seq;
+        char text[logLineLen];
+    };
+
+    static inline LogLine logBuf[logCap]{};
+    static inline uint8_t logHead{0U};
+    static inline uint8_t logCount{0U};
+    static inline uint32_t logNextSeq{1UL};
 
     static inline volatile bool enabled{true};
 
@@ -66,6 +82,7 @@ private:
         _medium : Button::UP,
         _zero : Button::SET,
         state : Button::NONE,
+        lastRaw : 0U,
     };
     static inline Ladder top{
         pressed : false,
@@ -81,6 +98,7 @@ private:
         _medium : Button::BRIGHTNESS,
         _zero : Button::SNOOZE,
         state : Button::NONE,
+        lastRaw : 0U,
     };
     static inline Ladder *active{&rear};
 
@@ -95,6 +113,10 @@ private:
     void snooze();
 
     static void onInterrupt();
+    static void appendLog(const char *event);
+    static void onGetPage(AsyncWebServerRequest *request);
+    static void onGetLive(AsyncWebServerRequest *request);
+    static void onGetLog(AsyncWebServerRequest *request);
 
 public:
     explicit ButtonExtension() : ExtensionModule(name) {};

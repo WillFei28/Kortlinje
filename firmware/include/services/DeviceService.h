@@ -8,6 +8,8 @@
 #include "services/WebServerService.h"
 
 #include <ArduinoJson.h> // NOLINT(misc-include-cleaner)
+#include <ESPAsyncWebServer.h>
+#include <time.h>
 
 class DeviceService final : public ServiceModule
 {
@@ -26,13 +28,36 @@ public:
     static void transmit(JsonObjectConst payload, std::string_view source, bool retain = true);
 
     [[nodiscard]] static JsonObjectConst getTransmits();
+    [[nodiscard]] static bool isTimeSynced();
+    [[nodiscard]] static float getLoad0();
+    [[nodiscard]] static float getLoad1();
+    [[nodiscard]] static float getHandle0Us();
+    [[nodiscard]] static float getHandle1Us();
+    [[nodiscard]] static uint32_t getLoop0Hz();
+    [[nodiscard]] static uint32_t getLoop1Hz();
 
 private:
+    struct CoreLoad
+    {
+        uint64_t windowStart;
+        uint64_t busy;
+        uint32_t loops;
+        float pct;
+        float handleUs;
+        uint32_t loopHz;
+    };
+
     static constexpr uint8_t samples{(0b1U << 16U) / (0b1U << ADC_RESOLUTION)};
+    static constexpr time_t minValidEpoch{1'577'836'800L}; // 2020-01-01 UTC
+    static constexpr unsigned long ntpRetryMs{15'000UL};
+    static constexpr unsigned long wifiRetryMs{20'000UL};
 
     float temperature{.0F};
 
     float voltage{.0F};
+
+    static inline CoreLoad load0{0ULL, 0ULL, 0UL, .0F, .0F, 0UL};
+    static inline CoreLoad load1{0ULL, 0ULL, 0UL, .0F, .0F, 0UL};
 
     DisplayService display{};
 
@@ -46,10 +71,20 @@ private:
 
     WebServerService webServer{};
 
+    static inline bool timeSynced{false};
+    static inline bool ntpStarted{false};
+    static inline bool wifiConnected{false};
+    static inline unsigned long lastNtpAttemptMs{0UL};
+    static inline unsigned long lastWifiAttemptMs{0UL};
+
     void transmit();
+    void pollTime();
+    void pollWifi();
 
     static void onReceive(JsonObjectConst payload, std::string_view source);
     static void onWaitSet();
+    static void onGetStats(AsyncWebServerRequest *request);
+    static void sampleLoad(CoreLoad &load, uint64_t started, uint64_t finished);
 
     static uint16_t getSamples();
 };

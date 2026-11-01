@@ -2,10 +2,12 @@
 
 #include "config/secrets.h"
 #include "extensions/AlarmExtension.h"
-#include "extensions/PlaylistExtension.h"
 #include "services/DisplayService.h"
 #include "services/ModesService.h"
+#include "services/WebServerService.h"
 
+#include <ArduinoJson.h>
+#include <cstdio>
 #include <hardware/adc.h>
 #include <hardware/irq.h>
 
@@ -17,6 +19,10 @@ void ButtonExtension::configure()
 
 void ButtonExtension::begin()
 {
+    WebServerService::http.on("/buttons/live", AsyncWebRequestMethod::AsyncWebRequestMethodType::HTTP_GET, &onGetLive);
+    WebServerService::http.on("/buttons/log", AsyncWebRequestMethod::AsyncWebRequestMethodType::HTTP_GET, &onGetLog);
+    WebServerService::http.on("/buttons", AsyncWebRequestMethod::AsyncWebRequestMethodType::HTTP_GET, &onGetPage);
+
     adc_init();
     adc_gpio_init(PIN_REAR);
     adc_gpio_init(PIN_TOP);
@@ -47,6 +53,28 @@ void ButtonExtension::handle()
         top.ready = false;
         process(top.state);
     }
+
+    // Log big REAR ADC drops even when ladder miss — distinguishes wiring vs software.
+    static uint32_t lastRearLogMs{0UL};
+    static uint16_t lastRearLogged{0xFFFFU};
+    const uint32_t nowMs{millis()};
+    const uint16_t rearRaw{rear.lastRaw};
+    if (rear.idle > 0U && rearRaw + 120U < rear.idle && (nowMs - lastRearLogMs) >= 200UL)
+    {
+        const uint16_t delta{static_cast<uint16_t>(lastRearLogged > rearRaw ? lastRearLogged - rearRaw : rearRaw - lastRearLogged)};
+        if (lastRearLogged == 0xFFFFU || delta >= 40U)
+        {
+            lastRearLogMs = nowMs;
+            lastRearLogged = rearRaw;
+            char tag[28];
+            std::snprintf(tag, sizeof(tag), "rear-drop-%u", static_cast<unsigned>(rearRaw));
+            appendLog(tag);
+        }
+    }
+    else if (rearRaw + 40U >= rear.idle)
+    {
+        lastRearLogged = rearRaw;
+    }
 }
 
 void ButtonExtension::enable()
@@ -62,32 +90,158 @@ void ButtonExtension::enable()
 
 bool ButtonExtension::isEnabled() { return enabled; }
 
+void ButtonExtension::appendLog(const char *event)
+{
+    LogLine &line{logBuf[logHead]};
+    line.seq = logNextSeq++;
+    std::snprintf(line.text,
+                  sizeof(line.text),
+                  "#%lu %s rear raw=%u idle=%u h=%u m=%u l=%u mg=%u | top raw=%u idle=%u",
+                  static_cast<unsigned long>(line.seq),
+                  event != nullptr ? event : "-",
+                  static_cast<unsigned>(rear.lastRaw),
+                  static_cast<unsigned>(rear.idle),
+                  static_cast<unsigned>(rear.high),
+                  static_cast<unsigned>(rear.medium),
+                  static_cast<unsigned>(rear.low),
+                  static_cast<unsigned>(rear.margin),
+                  static_cast<unsigned>(top.lastRaw),
+                  static_cast<unsigned>(top.idle));
+    logHead = static_cast<uint8_t>((logHead + 1U) % logCap);
+    if (logCount < logCap)
+    {
+        ++logCount;
+    }
+}
+
+void ButtonExtension::onGetPage(AsyncWebServerRequest *request)
+{
+    static constexpr char page[] =
+        "<!doctype html><meta charset=utf-8><title>Buttons</title>"
+        "<style>body{font:14px/1.35 ui-monospace,Menlo,monospace;margin:12px;background:#111;color:#ddd}"
+        "#live{white-space:pre;padding:8px;background:#1b1b1b;border:1px solid #333;margin-bottom:8px}"
+        "#log{white-space:pre;height:70vh;overflow:auto;padding:8px;background:#000;border:1px solid #333;"
+        "user-select:text}button{font:inherit;margin:0 6px 8px 0;padding:4px 10px}</style>"
+        "<div id=live>loading…</div>"
+        "<button id=pauseBtn onclick=\"paused=!paused;pauseBtn.textContent=paused?'resume':'pause'\">pause</button>"
+        "<button onclick=\"navigator.clipboard.writeText(log.textContent)\">copy log</button>"
+        "<div>TOP: high=CYCLE med=SLEEP/BRIGHT low=DISMISS zero=SNOOZE · REAR: high=DOWN med=UP low=ALARM "
+        "zero=SET</div>"
+        "<pre id=log></pre>"
+        "<script>"
+        "let after=0,paused=false;"
+        "const live=document.getElementById('live');"
+        "const log=document.getElementById('log');"
+        "const pauseBtn=document.getElementById('pauseBtn');"
+        "async function tick(){"
+        "  if(paused) return;"
+        "  try{"
+        "    const L=await (await fetch('/buttons/live')).json();"
+        "    live.textContent="
+        "      'LIVE rear raw='+L.rear.raw+' idle='+L.rear.idle+' high='+L.rear.high+"
+        "      ' med='+L.rear.med+' low='+L.rear.low+' margin='+L.rear.margin+"
+        "      '\\nLIVE top  raw='+L.top.raw+' idle='+L.top.idle+' high='+L.top.high+"
+        "      ' med='+L.top.med+' low='+L.top.low+' margin='+L.top.margin;"
+        "    const t=await (await fetch('/buttons/log?after='+after)).text();"
+        "    if(t){"
+        "      for(const row of t.trim().split('\\n')){"
+        "        const i=row.indexOf(' '); if(i<0) continue;"
+        "        after=parseInt(row.slice(0,i),10)||after;"
+        "        log.textContent+=row.slice(i+1)+'\\n';"
+        "      }"
+        "      log.scrollTop=log.scrollHeight;"
+        "    }"
+        "  }catch(e){}"
+        "}"
+        "setInterval(tick,500);tick();"
+        "</script>";
+    request->send(200, "text/html", page);
+}
+
+void ButtonExtension::onGetLive(AsyncWebServerRequest *request)
+{
+    JsonDocument doc{};
+    JsonObject rearObj{doc["rear"].to<JsonObject>()};
+    rearObj["raw"].set(rear.lastRaw);
+    rearObj["idle"].set(rear.idle);
+    rearObj["high"].set(rear.high);
+    rearObj["med"].set(rear.medium);
+    rearObj["low"].set(rear.low);
+    rearObj["margin"].set(rear.margin);
+    JsonObject topObj{doc["top"].to<JsonObject>()};
+    topObj["raw"].set(top.lastRaw);
+    topObj["idle"].set(top.idle);
+    topObj["high"].set(top.high);
+    topObj["med"].set(top.medium);
+    topObj["low"].set(top.low);
+    topObj["margin"].set(top.margin);
+    AsyncResponseStream *response{request->beginResponseStream("application/json")};
+    serializeJson(doc, *response);
+    request->send(response);
+}
+
+void ButtonExtension::onGetLog(AsyncWebServerRequest *request)
+{
+    uint32_t after{0UL};
+    if (request->hasParam("after"))
+    {
+        after = static_cast<uint32_t>(request->getParam("after")->value().toInt());
+    }
+    AsyncResponseStream *response{request->beginResponseStream("text/plain")};
+    const uint8_t start{static_cast<uint8_t>((logHead + logCap - logCount) % logCap)};
+    for (uint8_t i{0U}; i < logCount; ++i)
+    {
+        const LogLine &line{logBuf[(start + i) % logCap]};
+        if (line.seq > after)
+        {
+            response->printf("%lu %s\n", static_cast<unsigned long>(line.seq), line.text);
+        }
+    }
+    request->send(response);
+}
+
 void ButtonExtension::process(Button button)
 {
     switch (button)
     {
     case Button::ALARM:
+        Serial.println("button alarm");
+        appendLog("alarm");
         alarm();
         break;
     case Button::BRIGHTNESS:
+        Serial.println("button brightness/sleep");
+        appendLog("sleep");
         brightness();
         break;
     case Button::SET:
+        Serial.println("button set");
+        appendLog("set");
         config();
         break;
     case Button::CYCLE:
+        Serial.println("button cycle");
+        appendLog("cycle");
         cycle();
         break;
     case Button::DISMISS:
+        Serial.println("button dismiss");
+        appendLog("dismiss");
         dismiss();
         break;
     case Button::DOWN:
+        Serial.println("button down");
+        appendLog("down");
         minus();
         break;
     case Button::UP:
+        Serial.println("button up");
+        appendLog("up");
         plus();
         break;
     case Button::SNOOZE:
+        Serial.println("button snooze");
+        appendLog("snooze");
         snooze();
         break;
     default:
@@ -101,6 +255,7 @@ void __time_critical_func(ButtonExtension::onInterrupt)()
     Ladder &ladder{*active};
     const Button _state{ladder.state};
     const uint16_t _raw{raw};
+    ladder.lastRaw = _raw;
     if (_raw >= ladder.idle - ladder.margin && _raw <= ladder.idle)
     {
         ladder.state = Button::NONE;
@@ -154,7 +309,13 @@ void __time_critical_func(ButtonExtension::onInterrupt)()
             ladder.high = ladder.idle * 3U / 4U;
             ladder.medium = ladder.idle * 2U / 3U;
             ladder.low = ladder.idle / 2U;
-            ladder.margin = static_cast<uint8_t>((ladder.high - ladder.medium) / 3U);
+            const uint8_t computed{static_cast<uint8_t>((ladder.high - ladder.medium) / 3U)};
+            const uint8_t floor{static_cast<uint8_t>(ladder.idle / 16U)};
+            ladder.margin = computed > floor ? computed : floor;
+            if (ladder.margin < 8U)
+            {
+                ladder.margin = 8U;
+            }
         }
     }
     active = (active == &rear) ? &top : &rear;
@@ -223,7 +384,15 @@ void ButtonExtension::config()
 
 void ButtonExtension::cycle()
 {
-    DisplayService::getPower() ? PlaylistExtension::setEnabled(!PlaylistExtension::getEnabled()) : DisplayService::setPower(true);
+    // Local: Cycle switches Clock <-> Ticker. Upstream toggles Playlist instead.
+    if (DisplayService::getPower())
+    {
+        ModesService::setModeNext();
+    }
+    else
+    {
+        DisplayService::setPower(true);
+    }
 }
 
 void ButtonExtension::dismiss() { AlarmExtension::dismiss(); }

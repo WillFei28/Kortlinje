@@ -50,18 +50,36 @@ FontModule::Symbol KortlinjeFont::getChar(char32_t character) const
         return toSymbol(exclamationMark);
     case '%': // U+0025 PERCENT SIGN
         return toSymbol(percentSign);
+    case '-': // U+002D HYPHEN-MINUS
+        return toSymbol(hyphenMinus);
     case '.': // U+002E FULL STOP
         return toSymbol(fullStop);
     case ':': // U+003A COLON
         return toSymbol(colon, 1U);
+    case 'K': // U+004B LATIN CAPITAL LETTER K
+        return toSymbol(latinCapitalLetterK);
+    case 'Q': // U+0051 LATIN CAPITAL LETTER Q
+        return toSymbol(latinCapitalLetterQ);
+    case 'X': // U+0058 LATIN CAPITAL LETTER X
+        return toSymbol(latinCapitalLetterX);
     case 'Y': // U+0059 LATIN CAPITAL LETTER Y
         return toSymbol(latinCapitalLetterY);
+    case 'Z': // U+005A LATIN CAPITAL LETTER Z
+        return toSymbol(latinCapitalLetterZ);
     case 'e': // U+0065 LATIN SMALL LETTER E
         return toSymbol(latinSmallLetterE);
     case 'j': // U+006A LATIN SMALL LETTER J
         return toSymbol(latinSmallLetterJ);
+    case 'k': // U+006B LATIN SMALL LETTER K
+        return toSymbol(latinCapitalLetterK);
+    case 'q': // U+0071 LATIN SMALL LETTER Q
+        return toSymbol(latinCapitalLetterQ);
+    case 'x': // U+0078 LATIN SMALL LETTER X
+        return toSymbol(latinCapitalLetterX);
     case 'y': // U+0079 LATIN SMALL LETTER Y
         return toSymbol(latinCapitalLetterY);
+    case 'z': // U+007A LATIN SMALL LETTER Z
+        return toSymbol(latinCapitalLetterZ);
     case U'°': // U+00B0 DEGREE SIGN
         return toSymbol(degreeSign, 7U);
     case U'♥': // U+2665 BLACK HEART SUIT
