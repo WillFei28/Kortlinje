@@ -17,8 +17,26 @@ void WebUiExtension::begin()
     WebServerService::http.on("/index.js", AsyncWebRequestMethod::AsyncWebRequestMethodType::HTTP_GET, &onGetJavascript);
 }
 
+void WebUiExtension::onReceive(JsonObjectConst payload, std::string_view source)
+{
+    static_cast<void>(source);
+    if (payload["preview"].is<bool>())
+    {
+        previewWanted = payload["preview"].as<bool>();
+        if (previewWanted)
+        {
+            render = true;
+            pending = true;
+        }
+    }
+}
+
 void WebUiExtension::handle()
 {
+    if (!previewWanted)
+    {
+        return;
+    }
     if (render && pending && WebSocketExtension::server().count() != 0U)
     {
         pending = false;
@@ -37,10 +55,12 @@ void WebUiExtension::handle()
         }
         if (WebSocketExtension::server().binaryAll(bytes.data(), bytes.size()) != AsyncWebSocket::SendStatus::ENQUEUED)
         {
-            ++interval;
             render = true;
         }
-        alarm = add_alarm_in_ms(interval, &onAlarm, nullptr, true);
+        if (alarm == 0L)
+        {
+            alarm = add_alarm_in_ms(interval, &onAlarm, nullptr, true);
+        }
     }
 }
 

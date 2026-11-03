@@ -1,0 +1,42 @@
+﻿ROUTE_ID,ROUTE_NAME_CHI,ROUTE_NAME_ENG,IS_CIRCULAR,LINE_UP,LINE_DOWN,REFERENCE_ID
+506,屯門碼頭至兆麟,Tuen Mun Ferry Pier to Siu Lun,0,506_SL,506_TMFP,506
+506,富健花園至屯門站,Glorious Garden to Tuen Mun Station,0,506_GG_TMS,,506-1
+K12,大埔墟站至八號花園,Tai Po Market Station to Eightland Garden,0,K12_EG,K12_TPMS,K12
+K14,大埔超級城至大埔墟站,Tai Po Mega Mall to Tai Po Market Station,0,K14_TPMS,,K14
+K17,大埔墟站至富善,Tai Po Market Station to Fu Shin,0,K17_FS,K17_TPMS,K17
+K18,大埔墟站至廣福 (循環線),Tai Po Market Station to Kwong Fuk (Circular),1,K18_KF_CIR,,K18
+K51,富泰至大欖,Fu Tai to Tai Lam,0,K51_FT_TL,K51_TL_FT,K51
+K51A,富泰至掃管笏,Fu Tai to So Kwun Wat,0,K51A_SKWT,K51A_FT,K51A
+K51,富泰至兆康站,Fu Tai to Siu Hong Station,0,K51_FT_SHS,,K51-1
+K51,兆康站至富泰,Siu Hong Station to Fu Tai,0,K51_SHS_FT,,K51-2
+K52,悅湖山莊至龍鼓灘,Yuet Wu Villa to Lung Kwu Tan,0,K52_YWV_LKT,K52_LKT_YWV,K52
+K52,輕鐵屯門站至龍鼓灘,LR Tuen Mun Stop to Lung Kwu Tan,0,K52_LRTMS_LKT,,K52-1
+K52P,龍鼓灘至屯門站,Lung Kwu Tan to Tuen Mun Station,0,K52P_LKT_TMS,,K52P
+K53,屯門站至掃管笏 (循環線),Tuen Mun Station to So Kwun Wat (Circular),1,K53_SKW_CIR,,K53
+K53S,屯門站至業旺邨 (循環線),Tuen Mun Station to Yip Wong Estate (Circular),1,K53S_YWE_CIR,,K53S
+K54,和田邨至屯門市中心(循環線),Wo Tin Estate to Tuen Mun Town Centre (Circular),1,K54_CIR,,K54
+K54A,和田邨至兆康站,Wo Tin Estate to Siu Hong Station,0,K54A_WTE_SHS,K54A_SHS_WTE,K54A
+K58,富泰至掃管笏,Fu Tai to So Kwun Wat,0,K58_FT_SKW,K58_SKW_FT,K58
+K65,元朗站至流浮山,Yuen Long Station to Lau Fau Shan,0,K65_LFS,K65_YLS,K65
+K65A,天水圍站至流浮山,Tin Shui Wai Station to Lau Fau Shan,0,K65A_LFS,K65A_TSWS,K65A
+K66,朗屏至大棠黃泥墩村,Long Ping to Tai Tong Wong Nai Tun Tsuen,0,K66_TTWNTT,K66_LP,K66
+K66,大棠黃泥墩村至朗屏邨悅屏樓 ,"Tai Tong Wong Nai Tun Tsuen to Yuet Ping House, Long Ping Estate ",0,K66_TT_YPH,,K66-1
+K66,大棠黃泥墩村至安康路,Tai Tong Wong Nai Tun Tsuen to On Hong Road,0,K66_TT_OHR,,K66-2
+K66,南坑排至朗屏,Nam Hang Pai to Long Ping,0,K66_NHP_LP,,K66-3
+K68,元朗工業邨至元朗公園 (循環線),Yuen Long Industrial Estate to Yuen Long Park (Circular),1,K68_CIR,,K68
+K68,銀田花園至元朗工業邨,Silver Field Garden to Yuen Long Industrial Estate,0,K68_SFG_YLIE,,K68-1
+K68,元朗廣場至元朗工業邨,Yuen Long Plaza to Yuen Long Industrial Estate,0,K68_YLP_YLIE,,K68-2
+K68,大橋村至元朗工業邨,Tai Kiu Tsuen to Yuen Long Industrial Estate,0,K68_TKT_YLIE,,K68-3
+K68,元朗工業邨至大橋村,Yuen Long Industrial Estate to Tai Kiu Tsuen,0,K68_YLIE_TKT,,K68-4
+K73,天恆至元朗西,Tin Heng to Yuen Long West,0,K73_YLW,K73_TH,K73
+K73,天恩至元朗西,Tin Yan to Yuen Long West,0,K73_TY_YLW,,K73-1
+K73,香港青年協會李兆基書院至元朗西,HKFYG Lee Shau Kee College to Yuen Long West,0,K73_HKFYG_YLW,,K73-2
+K74,天水圍市中心至凹頭 (循環線),Tin Shui Wai Town Centre to Au Tau (Circular),1,K74_POH_CIR,,K74
+K75A,天水圍站至洪水橋 (循環線),Tin Shui Wai Station to Hung Shui Kiu (Circular),1,K75A_CIR,,K75A
+K75P,天瑞至洪水橋 (循環線),Tin Shui to Hung Shui Kiu (Circular),1,K75P_CIR,,K75P
+K75S,天水圍站至洪福邨 (循環線),Tin Shui Wai Station to Hung Fuk Estate (Circular),1,K75S_CIR,,K75S
+K75S,洪水橋巴士廠至天水圍站,Hung Shui Kiu Bus Depot to Tin Shui Wai Station,0,K75S_HSKBD_TSWS,,K75S1
+K75P,洪水橋巴士廠至天瑞,Hung Shui Kiu Bus Depot to Tin Shui,0,K75P_HSKBD_TS,,K75P1
+K76,天恆至天水圍站,Tin Heng to Tin Shui Wai Station,0,K76_TSWS,K76_TH,K76
+K52A,屯門站至曾咀,Tuen Mun Station to Tsang Tsui,0,K52A_TT,K52A_TMS,K52A
+K76S,濕地公園路(近天葵路)至天盛苑/港鐵天水圍站,Wetland Park Road (near Tin Kwai Road) to Tin Shing Court /MTR Tin Shui Wai Station,0,K76S_TSC,K76S_HKWP,K76S

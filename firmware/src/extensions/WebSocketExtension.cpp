@@ -2,6 +2,8 @@
 
 #include "extensions/WebUiExtension.h"
 #include "services/DeviceService.h"
+#include "services/EtaService.h"
+#include "services/HangTrace.h"
 #include "services/WebServerService.h"
 
 void WebSocketExtension::begin()
@@ -10,20 +12,30 @@ void WebSocketExtension::begin()
     WebServerService::http.addHandler(&socket);
 }
 
-void WebSocketExtension::handle() { socket.cleanupClients(); }
+void WebSocketExtension::handle()
+{
+    if (EtaService::httpActive())
+    {
+        return;
+    }
+    socket.cleanupClients();
+}
 
 void WebSocketExtension::onEvent(AsyncWebSocket *server, AsyncWebSocketClient *client, AwsEventType type, void *arg,
                                  const uint8_t *data, size_t len)
 {
+    const HangTrace::IrqScope scope{type == AwsEventType::WS_EVT_CONNECT ? HangTrace::Stage::WsConnect
+                                    : type == AwsEventType::WS_EVT_DATA  ? HangTrace::Stage::WsData
+                                                                         : HangTrace::Stage::WsOther};
     switch (type)
     {
     case AwsEventType::WS_EVT_CONNECT:
     {
-        const JsonObjectConst transmits{DeviceService::getTransmits()};
-        const size_t length{measureJson(transmits)};
-        std::vector<char> message(length + 1U);
-        serializeJson(transmits, message.data(), length + 1U);
-        client->text(message.data(), length);
+        std::string message{};
+        DeviceService::serializeTransmits(message);
+        client->text(message.data(), message.size());
+        // Default on until client says otherwise (home clock canvas is the usual first view).
+        WebUiExtension::previewWanted = true;
         WebUiExtension::render = true;
     }
     break;
@@ -63,6 +75,13 @@ void WebSocketExtension::onEvent(AsyncWebSocket *server, AsyncWebSocketClient *c
         }
     }
     break;
+    case AwsEventType::WS_EVT_DISCONNECT:
+        if (server->count() == 0U)
+        {
+            WebUiExtension::previewWanted = false;
+            WebUiExtension::render = false;
+        }
+        break;
     default:
         break;
     }

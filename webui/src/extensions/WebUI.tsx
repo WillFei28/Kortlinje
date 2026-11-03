@@ -8,6 +8,9 @@ import { Tooltip } from "../components/Tooltip";
 import { HOSTNAME, NAME } from "../config/constants";
 import { Device } from "../config/devices";
 import { VERSION } from "../config/version";
+import { MODE_DRAW } from "../config/modules";
+import { name as ModeDrawName } from "../modes/Draw";
+import { name as ModeTickerName } from "../modes/Ticker";
 import {
     Main as DisplayMain,
     DisplayPower,
@@ -22,6 +25,7 @@ import {
 } from "../services/Extensions";
 import {
     Main as ModesMain,
+    ModesMode,
     name as ModesName,
     SidebarSecondary as ModesSecondarySidebar,
     Sidebar as ModesSidebar,
@@ -45,6 +49,23 @@ createEffect(() => {
     if (!DisplayPower() && !getSidebar()) {
         setSidebar(true);
     }
+});
+
+/**
+ * LED preview only when the home clock canvas is actually mounted:
+ * path `/` + power on + mode that uses ExtensionWebUIMain (Clock), not Ticker/Draw.
+ */
+createEffect(() => {
+    if (WebSocketState() !== WebSocketWS.OPEN) {
+        return;
+    }
+    const mode = ModesMode() || "Clock";
+    const showingClockCanvas =
+        WebUIPath() === "/" &&
+        DisplayPower() === true &&
+        mode !== ModeTickerName &&
+        !(MODE_DRAW && mode === ModeDrawName);
+    WebSocketWS.send(JSON.stringify({ [name]: { preview: showingClockCanvas } }));
 });
 
 export const receiver = (bytes: Uint8Array) => {
@@ -256,15 +277,29 @@ const Layout: Component<{
     </div>
 );
 
+let canonicalTried = false;
+
+/** Prefer mDNS once — never yank an active IP session mid-flow (ETA picker). */
 export const Canonical = () => {
-    import.meta.env.PROD &&
-        `${HOSTNAME}.local` !== location.hostname &&
-        fetch(`http://${HOSTNAME}.local`, {
-            method: "HEAD",
-        }).then((response) => {
+    if (!import.meta.env.PROD || canonicalTried) {
+        return;
+    }
+    canonicalTried = true;
+    if (location.hostname === `${HOSTNAME}.local`) {
+        return;
+    }
+    // User opened by IP / non-mDNS host — keep them here.
+    if (/^\d{1,3}(\.\d{1,3}){3}$/.test(location.hostname) || location.hostname.includes(":")) {
+        return;
+    }
+    fetch(`http://${HOSTNAME}.local`, { method: "HEAD" })
+        .then((response) => {
             if (response.status === 200) {
                 WebSocketWS.close();
                 location.href = `http://${HOSTNAME}.local`;
             }
+        })
+        .catch(() => {
+            /* stay */
         });
 };

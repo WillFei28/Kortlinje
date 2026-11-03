@@ -19,7 +19,6 @@ void WebServerService::restart()
     http.begin();
     Serial.println("[web] server restarted");
 }
-
 void WebServerService::onEmpty(AsyncWebServerRequest *request) {}
 
 void WebServerService::onNotFound(AsyncWebServerRequest *request)

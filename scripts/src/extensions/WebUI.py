@@ -89,6 +89,16 @@ class WebUI:
             if file.is_file() and file.suffix != ".gz":
                 with gzip.open(file.parent / f"{file.name}.gz", "wb") as gz:
                     gz.write(file.read_bytes())
+        # #embed reads these gzip files, but SCons only rebuilds the object when the
+        # .cpp changes. Drop a stale object so the new page is actually linked in.
+        obj = (
+            pathlib.Path(".pio/build")
+            / self.project.env["PIOENV"]
+            / "src/extensions/WebUiExtension.cpp.o"
+        )
+        gz_js = self.path / "dist" / "index.js.gz"
+        if obj.exists() and gz_js.exists() and gz_js.stat().st_mtime > obj.stat().st_mtime:
+            obj.unlink()
 
     @staticmethod
     def clean() -> None:

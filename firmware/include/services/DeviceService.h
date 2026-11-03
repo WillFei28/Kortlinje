@@ -25,9 +25,11 @@ public:
     void handle1();
 
     static void receive(JsonObjectConst payload, std::string_view source, std::string_view destination);
+    /** Safe from either core; extensions (WebSocket etc.) are only invoked on core0. */
     static void transmit(JsonObjectConst payload, std::string_view source, bool retain = true);
 
-    [[nodiscard]] static JsonObjectConst getTransmits();
+    /** Snapshot of retained transmits, serialized under the cross-core lock. */
+    static void serializeTransmits(std::string &out);
     [[nodiscard]] static bool isTimeSynced();
     [[nodiscard]] static float getLoad0();
     [[nodiscard]] static float getLoad1();
@@ -51,6 +53,8 @@ private:
     static constexpr time_t minValidEpoch{1'577'836'800L}; // 2020-01-01 UTC
     static constexpr unsigned long ntpRetryMs{15'000UL};
     static constexpr unsigned long wifiRetryMs{20'000UL};
+    /** After the first successful join, a link lost this long triggers a clean reboot. */
+    static constexpr unsigned long wifiRebootMs{60'000UL};
 
     float temperature{.0F};
 
@@ -66,6 +70,11 @@ private:
     FontsService fonts{};
 
     static inline JsonDocument transmits{};
+    /** Per-source latest payloads awaiting core0 dispatch to extensions. */
+    static inline JsonDocument pendingTransmits{};
+    static inline bool flushingTransmits{false};
+
+    static void flushTransmits();
 
     ModesService modes{};
 
@@ -74,6 +83,8 @@ private:
     static inline bool timeSynced{false};
     static inline bool ntpStarted{false};
     static inline bool wifiConnected{false};
+    static inline bool wifiEverConnected{false};
+    static inline unsigned long wifiLostMs{0UL};
     static inline unsigned long lastNtpAttemptMs{0UL};
     static inline unsigned long lastWifiAttemptMs{0UL};
 

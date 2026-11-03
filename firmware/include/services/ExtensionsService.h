@@ -4,6 +4,7 @@
 #include "extensions/BatteryExtension.h"
 #include "extensions/ButtonExtension.h"
 #include "extensions/ClimateExtension.h"
+#include "extensions/EtaPickerExtension.h"
 #include "extensions/OtaExtension.h"
 #include "extensions/PhotocellExtension.h"
 #include "extensions/PlaylistExtension.h"
@@ -27,6 +28,7 @@ private:
     static inline BatteryExtension extensionBattery{};
     static inline ButtonExtension extensionButton{};
     static inline ClimateExtension extensionClimate{};
+    static inline EtaPickerExtension extensionEtaPicker{};
     static inline OtaExtension extensionOta{};
     static inline PhotocellExtension extensionPhotocell{};
     static inline PlaylistExtension extensionPlaylist{};
@@ -34,11 +36,12 @@ private:
     static inline WebSocketExtension extensionWebSocket{};
     static inline WebUiExtension extensionWebUi{};
 
-    static inline const std::array<ExtensionModule *, 10U> modules{
+    static inline const std::array<ExtensionModule *, 11U> modules{
         &extensionAlarm,
         &extensionBattery,
         &extensionButton,
         &extensionClimate,
+        &extensionEtaPicker,
         &extensionOta,
         &extensionPhotocell,
         &extensionPlaylist,

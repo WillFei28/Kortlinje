@@ -13,7 +13,11 @@ import {
 } from "../extensions/WebUI";
 import { WebSocketWS } from "../extensions/WebSocket";
 import { Main as ModeDrawMain, name as ModeDrawName, Sidebar as ModeDrawSidebar } from "../modes/Draw";
-import { name as ModeTickerName, Sidebar as ModeTickerSidebar } from "../modes/Ticker";
+import {
+    Main as ModeTickerMain,
+    name as ModeTickerName,
+    Sidebar as ModeTickerSidebar,
+} from "../modes/Ticker";
 import { DisplayPowerSet } from "./Display";
 
 export const name = "Modes";
@@ -36,6 +40,9 @@ export const Main: Component = () => (
                 <ModeDrawMain />
             </Match>
         )}
+        <Match when={getMode() === ModeTickerName}>
+            <ModeTickerMain />
+        </Match>
     </Switch>
 );
 

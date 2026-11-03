@@ -1,6 +1,7 @@
 #include "services/ExtensionsService.h"
 
 #include "services/DeviceService.h"
+#include "services/HangTrace.h"
 
 void ExtensionsService::begin()
 {
@@ -22,8 +23,9 @@ std::span<ExtensionModule *const> ExtensionsService::getAll() { return modules; 
 
 void ExtensionsService::handle()
 {
-    for (ExtensionModule *extension : modules)
+    for (size_t index{0U}; index < modules.size(); ++index)
     {
-        extension->handle();
+        HangTrace::markExtension(index);
+        modules[index]->handle();
     }
 }

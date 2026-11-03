@@ -87,38 +87,53 @@ ModeModule *ModesService::getMode() { return mode.get(); }
 
 void ModesService::onReceive(JsonObjectConst payload, std::string_view source)
 {
+    static_cast<void>(source);
     if (payload["mode"].is<std::string_view>())
     {
-        setMode(payload["mode"].as<std::string_view>());
+        // WebSocket arrives on core0 — defer swap to ModesService::handle (core1).
+        requestMode(payload["mode"].as<std::string_view>(), true);
     }
 }
 
 void ModesService::setModeNext()
 {
+    // Defer to core1 (ModesService::handle) — never swap mode from core0/button IRQ path.
     DisplayService::setPower(true);
+    if (mode == nullptr)
+    {
+        requestMode(ClockMode::name, true);
+        return;
+    }
+    const std::string_view current{mode->name};
     for (size_t idx{0U}; idx < names.size(); ++idx)
     {
-        if (names[idx] == mode->name)
+        if (names[idx] == current)
         {
-            const size_t index{(idx + 1U) % names.size()};
-            setMode(names[index], true);
+            requestMode(names[(idx + 1U) % names.size()], true);
             return;
         }
     }
+    requestMode(names.front(), true);
 }
 
 void ModesService::setModePrevious()
 {
     DisplayService::setPower(true);
+    if (mode == nullptr)
+    {
+        requestMode(ClockMode::name, true);
+        return;
+    }
+    const std::string_view current{mode->name};
     for (size_t idx{0U}; idx < names.size(); ++idx)
     {
-        if (names[idx] == mode->name)
+        if (names[idx] == current)
         {
-            const size_t index{(idx + names.size() - 1U) % names.size()};
-            setMode(names[index], true);
+            requestMode(names[(idx + names.size() - 1U) % names.size()], true);
             return;
         }
     }
+    requestMode(names.front(), true);
 }
 
 void ModesService::transmit()

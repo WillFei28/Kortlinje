@@ -242,6 +242,12 @@ void ProvisioningExtension::handle()
             staRetryPending = false;
             requestNtp();
         }
+        else if (millis() - staPendingSinceMs >= staNoIpRebootMs)
+        {
+            Serial.println("[provision] no IP after boot — reboot");
+            delay(50);
+            rp2040.reboot();
+        }
         else
         {
             const int link{cyw43_wifi_link_status(&cyw43_state, CYW43_ITF_STA)};
@@ -401,8 +407,14 @@ bool ProvisioningExtension::stationOnline()
 
 void ProvisioningExtension::kickStaDhcp()
 {
+    // Raw lwIP calls: lwIP otherwise runs in the core0 background IRQ concurrently.
+    cyw43_arch_lwip_begin();
     for (struct netif *n{netif_list}; n != nullptr; n = n->next)
     {
+        if (!ip4_addr_isany_val(*netif_ip4_addr(n)))
+        {
+            continue; // already leased — restarting DHCP would drop the address
+        }
         if (!netif_is_up(n))
         {
             netif_set_up(n);
@@ -411,15 +423,14 @@ void ProvisioningExtension::kickStaDhcp()
         {
             netif_set_link_up(n);
         }
-        if (netif_dhcp_data(n) != nullptr)
-        {
-            static_cast<void>(dhcp_renew(n));
-        }
-        else
+        // Start once; lwIP retries DISCOVER itself. dhcp_renew() before a lease
+        // restarted the handshake every staRetryMs and IP never arrived.
+        if (netif_dhcp_data(n) == nullptr)
         {
             static_cast<void>(dhcp_start(n));
         }
     }
+    cyw43_arch_lwip_end();
 }
 
 bool ProvisioningExtension::beginStation()
@@ -519,6 +530,7 @@ bool ProvisioningExtension::beginStation()
     }
     staRetryPending = true;
     statusMs = millis();
+    staPendingSinceMs = statusMs;
     requestNtp();
     return false;
 }

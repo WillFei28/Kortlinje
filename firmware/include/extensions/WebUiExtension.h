@@ -33,7 +33,8 @@ private:
 
     static inline volatile bool pending{true};
 
-    static inline uint32_t interval{0b1U << 6U};
+    /** LED mirror to WebUI — keep slow so WS stays up during ETA picker. */
+    static inline uint32_t interval{500U};
 
     static inline alarm_id_t alarm{0L};
 
@@ -49,7 +50,10 @@ public:
     explicit WebUiExtension() : ExtensionModule(name) {};
 
     static inline bool render{false};
+    /** LED mirror only when WebUI home clock canvas is visible. */
+    static inline bool previewWanted{false};
 
     void begin() override;
     void handle() override;
+    void onReceive(JsonObjectConst payload, std::string_view source) override;
 };

@@ -9,8 +9,11 @@
 #include "handlers/ConfigHandler.h"
 #include "modes/TickerMode.h"
 #include "services/DisplayService.h"
+#include "services/EtaService.h"
 #include "services/ExtensionsService.h"
 #include "services/FontsService.h"
+#include "services/HangTrace.h"
+#include "services/IrqSafeLock.h"
 #include "services/ModesService.h"
 #include "services/WebServerService.h"
 
@@ -21,13 +24,27 @@
 #include <string>
 #include <time.h>
 
+namespace
+{
+// Written from core1 modes, core0 loop and core0 lwIP IRQ (/stats, WS connect).
+IrqSafeLock transmitsLock{};
+} // namespace
+
 void DeviceService::begin0()
 {
+    HangTrace::captureBoot();
     Serial.begin(115200);
     Serial.println("[boot] core0");
+    Serial.printf("[boot] reset=%s last_stage=%lu at %lums irq_stage=%lu at %lums\n",
+                  HangTrace::lastWasWatchdog ? "WATCHDOG" : "other",
+                  static_cast<unsigned long>(HangTrace::lastStage),
+                  static_cast<unsigned long>(HangTrace::lastStageMs),
+                  static_cast<unsigned long>(HangTrace::lastIrqStage),
+                  static_cast<unsigned long>(HangTrace::lastIrqMs));
     // Only core0 mounts LittleFS (never on core1 — dual mount races).
     const bool fsOk{LittleFS.begin()};
     Serial.printf("[boot] LittleFS %s\n", fsOk ? "ok" : "FAIL");
+    EtaService::loadFromFs();
 #if defined(PROVISION_CLEAR_WIFI) && PROVISION_CLEAR_WIFI
     static_cast<void>(ConfigHandler::remove("Wifi", "ssid"));
     static_cast<void>(ConfigHandler::remove("Wifi", "key"));
@@ -49,6 +66,7 @@ void DeviceService::begin0()
     extensions.begin();
     Serial.println("[boot] extensions ready");
     rp2040.fifo.push(1UL);
+    HangTrace::start();
     Serial.println("[boot] core0 done");
 }
 
@@ -65,9 +83,12 @@ void DeviceService::begin1()
 void DeviceService::handle0()
 {
     const uint64_t started{rp2040.getCycleCount64()};
+    HangTrace::feed();
+    HangTrace::mark(HangTrace::Stage::Loop);
     extensions.handle();
     if (!ButtonExtension::isEnabled())
     {
+        HangTrace::mark(HangTrace::Stage::Adc);
         adc_set_clkdiv(.0F);
         adc_fifo_setup(true, false, 0U, false, false);
         adc_set_temp_sensor_enabled(true);
@@ -96,9 +117,13 @@ void DeviceService::handle0()
         voltage = static_cast<float>(sumVsys) * (9.9F / static_cast<float>(samples * ((0b1U << ADC_RESOLUTION) - 1U)));
         transmit();
     }
+    HangTrace::mark(HangTrace::Stage::Display);
     display.handle();
+    HangTrace::mark(HangTrace::Stage::PollWifi);
     pollWifi();
+    HangTrace::mark(HangTrace::Stage::PollTime);
     pollTime();
+    flushTransmits();
     sampleLoad(load0, started, rp2040.getCycleCount64());
 }
 
@@ -157,6 +182,7 @@ void DeviceService::sampleLoad(CoreLoad &load, uint64_t started, uint64_t finish
 
 void DeviceService::onGetStats(AsyncWebServerRequest *request)
 {
+    const HangTrace::IrqScope scope{HangTrace::Stage::HttpStats};
     JsonDocument doc{};
     doc["core0_load_pct"].set(load0.pct);
     doc["core1_load_pct"].set(load1.pct);
@@ -166,6 +192,22 @@ void DeviceService::onGetStats(AsyncWebServerRequest *request)
     doc["core1_loop_hz"].set(load1.loopHz);
     doc["f_cpu"].set(rp2040.f_cpu());
     doc["version"].set(VERSION);
+    doc["uptime_ms"].set(millis());
+    doc["last_reset_watchdog"].set(HangTrace::lastWasWatchdog);
+    doc["last_hang_stage"].set(HangTrace::lastStage);
+    if (HangTrace::lastStage >= HangTrace::Stage::ExtensionBase)
+    {
+        const auto all{ExtensionsService::getAll()};
+        const size_t index{HangTrace::lastStage - HangTrace::Stage::ExtensionBase};
+        if (index < all.size())
+        {
+            doc["last_hang_extension"].set(all[index]->name);
+        }
+    }
+    doc["last_hang_ms"].set(HangTrace::lastStageMs);
+    doc["last_irq_stage"].set(HangTrace::lastIrqStage);
+    doc["last_irq_ms"].set(HangTrace::lastIrqMs);
+    transmitsLock.lock();
     if (!transmits["Device"].isNull())
     {
         doc["temperature_chip"].set(transmits["Device"]["temperature"]);
@@ -176,6 +218,7 @@ void DeviceService::onGetStats(AsyncWebServerRequest *request)
         doc["temperature_climate"].set(transmits["Climate"]["temperature"]);
         doc["humidity"].set(transmits["Climate"]["humidity"]);
     }
+    transmitsLock.unlock();
     AsyncResponseStream *response{request->beginResponseStream("application/json")};
     serializeJson(doc, *response);
     request->send(response);
@@ -195,7 +238,13 @@ uint16_t DeviceService::getSamples()
     return sum;
 }
 
-JsonObjectConst DeviceService::getTransmits() { return transmits.as<JsonObjectConst>(); }
+void DeviceService::serializeTransmits(std::string &out)
+{
+    out.clear();
+    transmitsLock.lock();
+    serializeJson(transmits, out);
+    transmitsLock.unlock();
+}
 
 bool DeviceService::isTimeSynced() { return timeSynced; }
 
@@ -212,14 +261,21 @@ void DeviceService::pollWifi()
         if (!wifiConnected)
         {
             wifiConnected = true;
+            wifiEverConnected = true;
             Serial.print("wifi ");
             Serial.println(WiFi.localIP());
             ntpStarted = false;
             lastNtpAttemptMs = 0UL;
-            TickerMode::refreshCache(true);
         }
-        else
+        EtaService::pollIdle();
+        // Throttle — pollCache may block in HTTPS; calling it every handle0 starved
+        // AsyncWebServer and stacked TLS after fail (hang ~15s into soak).
+        static unsigned long lastEtaPollMs{0UL};
+        constexpr unsigned long kEtaPollMs{500UL};
+        if ((nowMs - lastEtaPollMs) >= kEtaPollMs)
         {
+            lastEtaPollMs = nowMs;
+            HangTrace::mark(HangTrace::Stage::EtaPoll);
             TickerMode::pollCache();
         }
         return;
@@ -228,7 +284,21 @@ void DeviceService::pollWifi()
     if (wifiConnected)
     {
         wifiConnected = false;
+        wifiLostMs = nowMs;
         Serial.println("wifi lost");
+    }
+
+    if (wifiEverConnected)
+    {
+        // WiFi.begin()/disconnect() tear down the netif under live AsyncTCP/OTA PCBs — core0
+        // hung right after such a rejoin. Let CYW43 rejoin on its own; reboot if it can't.
+        if ((nowMs - wifiLostMs) >= wifiRebootMs)
+        {
+            Serial.println("wifi lost too long — reboot");
+            delay(50);
+            rp2040.reboot();
+        }
+        return;
     }
 
     if ((nowMs - lastWifiAttemptMs) < wifiRetryMs)
@@ -262,9 +332,14 @@ void DeviceService::pollWifi()
     }
 
     Serial.println("wifi retry");
+    HangTrace::mark(HangTrace::Stage::WifiBegin);
     WiFi.disconnect(true);
     delay(100);
+    // WiFi.begin blocks up to 2×timeout (default 15s → 30s) — keep under the watchdog.
+    WiFi.setTimeout(5'000);
+    HangTrace::feed();
     static_cast<void>(WiFi.begin(ssid.c_str(), key.empty() ? nullptr : key.c_str()));
+    HangTrace::feed();
 }
 
 void DeviceService::pollTime()
@@ -363,12 +438,48 @@ void DeviceService::transmit()
 
 void DeviceService::transmit(JsonObjectConst payload, std::string_view source, bool retain)
 {
+    transmitsLock.lock();
     if (retain)
     {
         transmits[source].set(payload);
     }
-    for (ExtensionModule *extension : ExtensionsService::getAll())
+    pendingTransmits[source].set(payload);
+    transmitsLock.unlock();
+    // core0 loop only: in an lwIP IRQ, textAll could interrupt the loop's own textAll.
+    if (get_core_num() == 0U && __get_current_exception() == 0U)
     {
-        extension->onTransmit(payload, source);
+        flushTransmits();
     }
+}
+
+void DeviceService::flushTransmits()
+{
+    // Nested lwIP callbacks run while sync HTTPS polls; WS writes there wedge cyw43.
+    if (flushingTransmits || EtaService::httpActive())
+    {
+        return;
+    }
+    JsonDocument batch{};
+    transmitsLock.lock();
+    if (pendingTransmits.isNull() || pendingTransmits.as<JsonObjectConst>().size() == 0U)
+    {
+        transmitsLock.unlock();
+        return;
+    }
+    batch.set(pendingTransmits);
+    pendingTransmits.clear();
+    transmitsLock.unlock();
+
+    HangTrace::mark(HangTrace::Stage::Flush);
+    flushingTransmits = true;
+    for (const JsonPairConst pair : batch.as<JsonObjectConst>())
+    {
+        const std::string_view source{pair.key().c_str(), pair.key().size()};
+        const JsonObjectConst payload{pair.value().as<JsonObjectConst>()};
+        for (ExtensionModule *extension : ExtensionsService::getAll())
+        {
+            extension->onTransmit(payload, source);
+        }
+    }
+    flushingTransmits = false;
 }

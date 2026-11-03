@@ -82,6 +82,9 @@ private:
     static constexpr unsigned long staRetryMs{1000UL};
     /** Gap after a blocking rejoin attempt (connectStation up to setTimeout). */
     static constexpr unsigned long staRejoinMs{30000UL};
+    /** Saved creds but still no IP this long after boot ⇒ clean reboot (no netif teardown). */
+    static constexpr unsigned long staNoIpRebootMs{45000UL};
+    static inline unsigned long staPendingSinceMs{0UL};
     static constexpr unsigned long rebootDelayMs{800UL};
 
     static void startAp();
